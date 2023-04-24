@@ -3,20 +3,7 @@ import { createServer } from 'http'
 import { promisify } from 'util'
 import BusinessError from './businessError.js'
 import httpStatusCodes from './httpStatusCodes.js'
-
-function validateData(data) {
-  if (data.age < 20) {
-    throw new BusinessError("Field Age must be higher than 20.")
-  }
-
-  if (data.name?.length < 20) {
-    throw new BusinessError("Name length must be longer than 4 characters.")
-  }
-
-  if (Reflect.has(hero), connectionError) {
-    throw new Error("error connecting to DB!")
-  }
-}
+import DataEntity from './DataEntity.js'
 
 async function dbConnect () {
   const client = new MongoClient("mongodb://localhost:27017")
@@ -34,8 +21,19 @@ const { collections, client } = await dbConnect()
 async function handler(req, res) {
   for await (const data of req) {
     try {
-      const hero = JSON.parse(data)
-      validateData(hero)
+      const parsedData = JSON.parse(data)
+
+      // if (Reflect.has(parsedData), connectionError) {
+      //   throw new Error("error connecting to DB!")
+      // }
+      
+      const hero = new DataEntity(parsedData)
+      if(!hero.isValid()) {
+        res.writeHead(httpStatusCodes.BAD_REQUEST)
+        res.end(hero.notifications.join('\n'))
+        continue;
+      }
+
       await collections.heroes.insertOne({
         ...hero,
         updatedAt: new Date().toUTCString()
@@ -46,13 +44,6 @@ async function handler(req, res) {
       res.write(JSON.stringify({ heroes }))
       
     } catch (error) {
-      if (error instanceof BusinessError) {
-        res.writeHead(httpStatusCodes.BAD_REQUEST)
-        res.write(error.message)
-        continue
-
-      }
-      console.log(`a request error has happened ${error}`)
       res.writeHead(httpStatusCodes.INTERNAL_SERVER_ERROR)
       res.write(JSON.stringify({ message: 'internal server error.'}))
     } finally {
@@ -60,7 +51,7 @@ async function handler(req, res) {
     }
   }
 };
-// curl -i localhost:3000 -X POST --data '{"name": "WonderWoman", "age": 19}'
+// curl -i localhost:3000 -X POST --data '{"name": "w", "age": 19}'
 
 const server = createServer(handler).listen(3000, () => console.log('running on 3000 and process', process.pid));
 
